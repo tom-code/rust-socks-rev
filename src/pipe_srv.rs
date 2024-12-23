@@ -32,7 +32,7 @@ impl Pipe {
                 break;
             }
             let header = wire::decode_header(&header_buf)?;
-            debug!("got header {:?}", header);
+            //debug!("got header {:?}", header);
             let mut buf = vec![0_u8; header.size as usize];
             socket_reader.read_exact(buf.as_mut_slice()).await?;
             let clock = self.connections.read().await;

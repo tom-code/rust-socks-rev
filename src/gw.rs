@@ -87,7 +87,10 @@ pub async fn start_handle_connection(
     });
 }
 
-async fn handle_data_from_pipe(mut s_reader: OwnedReadHalf, pipe_sender_writer: tokio::sync::mpsc::Sender<Vec<u8>>, connections: Arc<RwLock<HashMap<u64, Connection>>>) -> Result<()> {
+async fn handle_data_from_pipe(mut s_reader: OwnedReadHalf,
+    pipe_sender_writer: tokio::sync::mpsc::Sender<Vec<u8>>,
+    connections: Arc<RwLock<HashMap<u64, Connection>>>
+) -> Result<()> {
     loop {
         let mut header_buf = vec![0_u8; 12];
         s_reader.read_exact(header_buf.as_mut_slice()).await?;
