@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 mod pipe_srv;
 mod gw;
 mod socks;
-mod wire;
+mod pipe_wire;
 
 #[derive(Parser)]
 #[command()]

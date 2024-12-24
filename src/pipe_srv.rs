@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::wire;
+use crate::pipe_wire;
 use anyhow::Result;
 use log::debug;
 use tokio::{
@@ -31,7 +31,7 @@ impl Pipe {
                 // pipe error - go out
                 break;
             }
-            let header = wire::decode_header(&header_buf)?;
+            let header = pipe_wire::decode_header(&header_buf)?;
             //debug!("got header {:?}", header);
             let mut buf = vec![0_u8; header.size as usize];
             socket_reader.read_exact(buf.as_mut_slice()).await?;
@@ -110,7 +110,7 @@ impl Pipe {
             incoming_writer,
         };
         self.add_connection(con).await;
-        let cmd = wire::encode_connect(&wire::Connect {
+        let cmd = pipe_wire::encode_connect(&pipe_wire::Connect {
             host: host.to_owned(),
             port,
             id,
@@ -123,7 +123,7 @@ impl Pipe {
         Ok(())
     }
     pub async fn close(&self, id: u64) -> Result<()> {
-        let msg = wire::encode_close(id)?;
+        let msg = pipe_wire::encode_close(id)?;
         self.send(msg)?;
         let mut clock = self.connections.write().await;
         clock.remove(&id);

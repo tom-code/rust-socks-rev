@@ -11,7 +11,7 @@ use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::pipe_srv::Pipe;
-use crate::wire;
+use crate::pipe_wire;
 
 #[derive(Debug)]
 struct SockMessageClientAuth {
@@ -92,11 +92,11 @@ async fn handle_messages_from_pipe(mut pipe_incoming_receiver: tokio::sync::mpsc
             break;
         }
         match from_pipe[0] {
-            wire::CMD_CLOSE => {
+            pipe_wire::CMD_CLOSE => {
                 debug!("close from pipe");
                 break;
             }
-            wire::CMD_DATA => {
+            pipe_wire::CMD_DATA => {
                 let data = &from_pipe[1..];
                 if tokio::io::AsyncWriteExt::write_all(&mut client_writer, data).await.is_err() {
                     break
@@ -117,7 +117,7 @@ async fn handle_data_from_client(mut client_reader: OwnedReadHalf, pipe: Arc<Pip
         if n == 0 {
             return Ok(())
         }
-        let datamsg = wire::encode_data(id, &buf[..n])?;
+        let datamsg = pipe_wire::encode_data(id, &buf[..n])?;
         pipe.send(datamsg).unwrap();
     }
 }
@@ -152,12 +152,12 @@ async fn connection_loop(pipe: Arc<Pipe>, mut socket: TcpStream, id: u64) -> Res
                 return Err(anyhow::anyhow!("error receiving connect response from pipe"))
             },
         };
-        if (from_pipe.len() != 2) || (from_pipe[0] != wire::CMD_CONNECT_ACK) {
+        if (from_pipe.len() != 2) || (from_pipe[0] != pipe_wire::CMD_CONNECT_ACK) {
             tokio::io::AsyncWriteExt::write_all(&mut client_writer, &socks5_connect_response(1)?).await?;
             pipe.close(id).await.unwrap();
             return Err(anyhow::anyhow!("error receiving connect response from pipe"))
         }
-        if from_pipe[1] != wire::CONNECT_STATUS_OK {
+        if from_pipe[1] != pipe_wire::CONNECT_STATUS_OK {
             tokio::io::AsyncWriteExt::write_all(&mut client_writer, &socks5_connect_response(5)?).await?;
             pipe.close(id).await.unwrap();
             return Err(anyhow::anyhow!("connect response is not ok {}", from_pipe[1]))

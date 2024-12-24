@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::wire;
+use crate::pipe_wire;
 use std::net::ToSocketAddrs;
 use log::debug;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -16,7 +16,7 @@ struct Connection {
 }
 
 pub async fn handle_connection_logic(
-    cfg: wire::Connect,
+    cfg: pipe_wire::Connect,
     id: u64,
     pipe_sender: tokio::sync::mpsc::Sender<Vec<u8>>,
     mut client_reader: tokio::sync::mpsc::Receiver<Vec<u8>>,
@@ -25,7 +25,7 @@ pub async fn handle_connection_logic(
             Ok(o) => o,
             Err(e) => {
                 debug!("can't resolve address {} {}", cfg.host, e.to_string());
-                pipe_sender.send(wire::encode_connect_ack(id, wire::CONNECT_STATUS_ERR)?).await?;
+                pipe_sender.send(pipe_wire::encode_connect_ack(id, pipe_wire::CONNECT_STATUS_ERR)?).await?;
                 return Err(anyhow::anyhow!(e.to_string()))
             }
         };
@@ -36,11 +36,11 @@ pub async fn handle_connection_logic(
             Ok(s) => s,
             Err(e) => {
                 // send error to adapter
-                pipe_sender.send(wire::encode_connect_ack(id, wire::CONNECT_STATUS_ERR)?).await?;
+                pipe_sender.send(pipe_wire::encode_connect_ack(id, pipe_wire::CONNECT_STATUS_ERR)?).await?;
                 return Err(anyhow::anyhow!(e.to_string()))
             }
         };
-        pipe_sender.send(wire::encode_connect_ack(id, wire::CONNECT_STATUS_OK)?).await?;
+        pipe_sender.send(pipe_wire::encode_connect_ack(id, pipe_wire::CONNECT_STATUS_OK)?).await?;
         let (mut remote_socket_reader, mut remote_socket_writer) = socket.into_split();
         tokio::spawn(async move {
             loop {
@@ -67,17 +67,17 @@ pub async fn handle_connection_logic(
             if n == 0 {
                 break;
             }
-            let encap = wire::encode_data(id, &buf[..n])?;
+            let encap = pipe_wire::encode_data(id, &buf[..n])?;
             pipe_sender.send(encap).await?;
         }
-        let closemsg = wire::encode_close(id)?;
+        let closemsg = pipe_wire::encode_close(id)?;
         pipe_sender.send(closemsg).await?;
         debug!("reader from remote done");
         Ok(())
 }
 
 pub async fn start_handle_connection(
-    cfg: wire::Connect,
+    cfg: pipe_wire::Connect,
     id: u64,
     pipe_sender: tokio::sync::mpsc::Sender<Vec<u8>>,
     client_reader: tokio::sync::mpsc::Receiver<Vec<u8>>,
@@ -94,12 +94,12 @@ async fn handle_data_from_pipe(mut s_reader: OwnedReadHalf,
     loop {
         let mut header_buf = vec![0_u8; 12];
         s_reader.read_exact(header_buf.as_mut_slice()).await?;
-        let header = wire::decode_header(&header_buf).unwrap();
+        let header = pipe_wire::decode_header(&header_buf).unwrap();
         debug!("received some {:?}", header);
         let mut buf = vec![0_u8; header.size as usize];
         s_reader.read_exact(buf.as_mut_slice()).await.unwrap();
-        if buf[0] == wire::CMD_CONNECT {
-            let connect = wire::decode_connect(&buf[1..]).unwrap();
+        if buf[0] == pipe_wire::CMD_CONNECT {
+            let connect = pipe_wire::decode_connect(&buf[1..]).unwrap();
             debug!("received connect {:?}", connect);
             let (client_sender_writer, client_sender_reader) =
                 tokio::sync::mpsc::channel::<Vec<u8>>(1024);
@@ -118,8 +118,8 @@ async fn handle_data_from_pipe(mut s_reader: OwnedReadHalf,
             )
             .await;
         }
-        if buf[0] == wire::CMD_DATA {
-            let datamsg = wire::decode_data(&buf[1..]).unwrap();
+        if buf[0] == pipe_wire::CMD_DATA {
+            let datamsg = pipe_wire::decode_data(&buf[1..]).unwrap();
             let lcon = connections.read().await;
             if let Some(c) = lcon.get(&header.id) {
                 if let Err(e) = c.remote_sender.send(datamsg).await {
@@ -127,7 +127,7 @@ async fn handle_data_from_pipe(mut s_reader: OwnedReadHalf,
                 }
             }
         }
-        if buf[0] == wire::CMD_CLOSE {
+        if buf[0] == pipe_wire::CMD_CLOSE {
             debug!("received close");
             let mut lcon = connections.write().await;
             if let Some(c) = lcon.get(&header.id) {
